@@ -4,11 +4,10 @@ import os
 import unittest
 
 import http_ece
+import pyelliptic
 from mock import patch
 from nose.tools import eq_, ok_
-import pyelliptic
-
-from pywebpush import WebPusher, WebPushException, CaseInsensitiveDict
+from pywebpush import WebPusher, WebPushException, CaseInsensitiveDict, bytes_compat
 
 
 class WebpushTestCase(unittest.TestCase):
@@ -16,9 +15,9 @@ class WebpushTestCase(unittest.TestCase):
         return {
             "endpoint": endpoint,
             "keys": {
-                'auth': base64.urlsafe_b64encode(os.urandom(16)).strip('='),
+                'auth': base64.urlsafe_b64encode(os.urandom(16)).strip(bytes_compat('=')),
                 'p256dh': base64.urlsafe_b64encode(
-                    recv_key.get_pubkey()).strip('='),
+                    recv_key.get_pubkey()).strip(bytes_compat('=')),
             }
         }
 
@@ -56,17 +55,17 @@ class WebpushTestCase(unittest.TestCase):
 
         push = WebPusher(subscription_info)
         eq_(push.subscription_info, subscription_info)
-        eq_(push.receiver_key, ('\x04\xea\xe7"\xc9W\xadJ0\xd9P3(%\x00\x13\x8b'
-                                '\x08l\xad4u\xa1\x19\n\xcc\x0eq\xff&\xdd1'
-                                '|W\xcd\x81\xf8\xeaN\x83\x92[\x99\x82\xe0\xe3'
-                                '\x89\x11r\xf4\x02\xd4M\xa00\x9b!\xb1F\x00'
-                                '\xfb\xfc\xcc=\x1f'))
-        eq_(push.auth_key, '\x93\xc2U\xea\xc8\xddn\x10"\xd6}\xff,0K\xbc')
+        eq_(push.receiver_key, bytes_compat(b'\x04\xea\xe7"\xc9W\xadJ0\xd9P3(%\x00\x13\x8b'
+                                            b'\x08l\xad4u\xa1\x19\n\xcc\x0eq\xff&\xdd1'
+                                            b'|W\xcd\x81\xf8\xeaN\x83\x92[\x99\x82\xe0\xe3'
+                                            b'\x89\x11r\xf4\x02\xd4M\xa00\x9b!\xb1F\x00'
+                                            b'\xfb\xfc\xcc=\x1f'))
+        eq_(push.auth_key, bytes_compat(b'\x93\xc2U\xea\xc8\xddn\x10"\xd6}\xff,0K\xbc'))
 
     def test_encode(self):
         recv_key = pyelliptic.ECC(curve="prime256v1")
         subscription_info = self._gen_subscription_info(recv_key)
-        data = "Mary had a little lamb, with some nice mint jelly"
+        data = bytes_compat("Mary had a little lamb, with some nice mint jelly")
         push = WebPusher(subscription_info)
         encoded = push.encode(data)
 
@@ -87,7 +86,7 @@ class WebpushTestCase(unittest.TestCase):
             dh=raw_dh,
             keyid=keyid,
             authSecret=raw_auth
-            )
+        )
 
         eq_(decoded, data)
 
@@ -105,7 +104,7 @@ class WebpushTestCase(unittest.TestCase):
         ok_('encryption' in pheaders)
         eq_(pheaders.get('AUTHENTICATION'), headers.get('Authentication'))
         ckey = pheaders.get('crypto-key')
-        ok_('pre-existing,' in ckey)
+        ok_(bytes_compat('pre-existing,') in ckey)
         eq_(pheaders.get('content-encoding'), 'aesgcm')
 
     def test_ci_dict(self):

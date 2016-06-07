@@ -9,6 +9,13 @@ import json
 import http_ece
 import pyelliptic
 import requests
+import six
+
+def bytes_compat(s):
+    if isinstance(s, six.binary_type):
+        return s
+    return s.encode("utf-8")
+
 
 
 class WebPushException(Exception):
@@ -101,16 +108,16 @@ class WebPusher:
             if keys.get(k) is None:
                 raise WebPushException("Missing keys value: %s", k)
         receiver_raw = base64.urlsafe_b64decode(
-            self._repad(keys['p256dh'].encode('utf8')))
+            self._repad(bytes_compat(keys['p256dh'])))
         if len(receiver_raw) != 65 and receiver_raw[0] != "\x04":
             raise WebPushException("Invalid p256dh key specified")
         self.receiver_key = receiver_raw
         self.auth_key = base64.urlsafe_b64decode(
-            self._repad(keys['auth'].encode('utf8')))
+            self._repad(bytes_compat(keys['auth'])))
 
     def _repad(self, str):
         """Add base64 padding to the end of a string, if required"""
-        return str + "===="[:len(str) % 4]
+        return str + bytes_compat("====")[:len(str) % 4]
 
     def encode(self, data):
         """Encrypt the data.
@@ -135,7 +142,7 @@ class WebPusher:
         http_ece.labels[server_key_id] = "P-256"
 
         encrypted = http_ece.encrypt(
-            data,
+            bytes_compat(data),
             salt=salt,
             keyid=server_key_id,
             dh=self.receiver_key,
@@ -143,8 +150,8 @@ class WebPusher:
 
         return CaseInsensitiveDict({
             'crypto_key': base64.urlsafe_b64encode(
-                server_key.get_pubkey()).strip('='),
-            'salt': base64.urlsafe_b64encode(salt).strip("="),
+                server_key.get_pubkey()).strip(bytes_compat('=')),
+            'salt': base64.urlsafe_b64encode(salt).strip(bytes_compat("=")),
             'body': encrypted,
         })
 
@@ -166,14 +173,14 @@ class WebPusher:
         encoded = self.encode(data)
         # Append the p256dh to the end of any existing crypto-key
         headers = CaseInsensitiveDict(headers)
-        crypto_key = headers.get("crypto-key", "")
+        crypto_key = bytes_compat(headers.get("crypto-key", ""))
         if crypto_key:
-            crypto_key += ','
-        crypto_key += "keyid=p256dh;dh=" + encoded["crypto_key"]
+            crypto_key += bytes_compat(',')
+        crypto_key += bytes_compat("keyid=p256dh;dh=") + encoded["crypto_key"]
         headers.update({
             'crypto-key': crypto_key,
             'content-encoding': 'aesgcm',
-            'encryption': "keyid=p256dh;salt=" + encoded['salt'],
+            'encryption': bytes_compat("keyid=p256dh;salt=") + encoded['salt'],
         })
         gcm_endpoint = 'https://android.googleapis.com/gcm/send'
         if self.subscription_info['endpoint'].startswith(gcm_endpoint):
