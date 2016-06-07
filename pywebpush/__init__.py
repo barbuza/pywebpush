@@ -155,24 +155,11 @@ class WebPusher:
             'body': encrypted,
         })
 
-    def send(self, data, headers={}, ttl=0, gcm_key=None, reg_id=None):
-        """Encode and send the data to the Push Service.
-
-        :param data: A serialized block of data (see encode() ).
-        :param gcm_key: API key obtained from the Google Developer Console.
-            Needed if endpoint is https://android.googleapis.com/gcm/send
-        :param reg_id: registration id of the recipient. If not provided,
-            it will be extracted from the endpoint.
-        :param headers: A dictionary containing any additional HTTP headers.
-        :param ttl: The Time To Live in seconds for this message if the
-            recipient is not online. (Defaults to "0", which discards the
-            message immediately if the recipient is unavailable.)
-
-        """
+    def get_request_data(self, data, headers=None, ttl=0, gcm_key=None, reg_id=None):
         # Encode the data.
         encoded = self.encode(data)
         # Append the p256dh to the end of any existing crypto-key
-        headers = CaseInsensitiveDict(headers)
+        headers = CaseInsensitiveDict(headers or {})
         crypto_key = bytes_compat(headers.get("crypto-key", ""))
         if crypto_key:
             crypto_key += bytes_compat(',')
@@ -206,8 +193,26 @@ class WebPusher:
 
         if 'ttl' not in headers or ttl:
             headers['ttl'] = ttl
+
         # Additionally useful headers:
         # Authorization / Crypto-Key (VAPID headers)
+        return endpoint, headers, encoded_data
+
+    def send(self, data, headers=None, ttl=0, gcm_key=None, reg_id=None):
+        """Encode and send the data to the Push Service.
+
+        :param data: A serialized block of data (see encode() ).
+        :param gcm_key: API key obtained from the Google Developer Console.
+            Needed if endpoint is https://android.googleapis.com/gcm/send
+        :param reg_id: registration id of the recipient. If not provided,
+            it will be extracted from the endpoint.
+        :param headers: A dictionary containing any additional HTTP headers.
+        :param ttl: The Time To Live in seconds for this message if the
+            recipient is not online. (Defaults to "0", which discards the
+            message immediately if the recipient is unavailable.)
+
+        """
+        endpoint, headers, encoded_data = self.get_request_data(data, headers, ttl, gcm_key, reg_id)
         return requests.post(endpoint,
                              data=encoded_data,
                              headers=headers)
